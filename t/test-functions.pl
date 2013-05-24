@@ -29,6 +29,69 @@ use Error qw':try';
 # Make sure the git messages come in English.
 $ENV{LC_MESSAGES} = 'C';
 
+# The Gerrit hooks tests need to interact with a real Gerrit server
+# running in the same host. Thus, we need some basic information which
+# must be included in a file called GERRIT_CONFIG in the same
+# directory as this file. The file is run as a Perl script and it must
+# return a hash-ref like this:
+#
+# {
+#   url        => 'http://localhost:8080',
+#   username   => 'user',
+#   password   => 'U-kant-no-dis',
+#   hooks_dir  => '/path/to/testsite/hooks',
+#   repo_dir   => '/path/to/testsite/git/test.git',
+#   repo_url   => 'http://localhost:8080/test',
+#   branch     => 'master',
+#   file       => 'file.txt',
+# };
+#
+# The meaning of each key is the following:
+#
+# * url, username, password: These values are used to construct a
+#   Gerrit::REST object to interact with the Gerrit server via its
+#   REST API.
+#
+# * hooks_dir: the directory where Gerrit hooks are kept. Note that
+#   during the tests some hooks will be set up on this directory,
+#   unless they are already existing. You may want to get rid of them
+#   after the tests.
+#
+# * repo_dir: the root directory of Gerrit's git repository that will
+#   be used for testing.
+#
+# * repo_url: Gerrit's repository URL which will be used to clone it.
+#
+# * branch: The branch in which commits will be created and from which
+#   they'll be pushed for review.
+#
+# * file: The (base)name of a file that will be modified during the
+#   tests in order to make commits.
+#
+# Note that the "git push" that's used to send a commit for review has
+# to work without dealing with passwords. You should take care of this
+# in the usual ways, like using an ssh-agent daemon or by configuring
+# your ~/.netrc file.
+
+my $gerrit_config = do {
+    my $file = catfile(qw/t GERRIT_CONFIG/);
+    if (-r $file) {
+        my $config = do $file;
+        unless ($config) {
+            die "couldn't parse '$file': $@\n" if $@;
+            die "couldn't run '$file'\n"       unless $config;
+        }
+        foreach my $key (qw/url username password hooks_dir repo_dir repo_url branch file/) {
+            die "missing '$key' key in $file\n" unless exists $config->{key};
+        }
+        eval {require Gerrit::REST}
+            or die "Can't require Gerrit::REST to perform Gerrit tests as configured in $file.\n";
+        $config;
+    } else {
+        undef;
+    }
+};
+
 # It's better to perform all tests in a temporary directory because
 # otherwise the author runs the risk of messing with its local
 # Git::Hooks git repository.
@@ -103,17 +166,21 @@ run_hook(\$0, \@ARGV);
 EOF
         }
     }
-	    chmod 0755 => $hook_pl;
+    chmod 0755 => $hook_pl;
 
-    @hooks = qw/ applypatch-msg pre-applypatch post-applypatch
-		 pre-commit prepare-commit-msg commit-msg
-		 post-commit pre-rebase post-checkout post-merge
-		 pre-receive update post-receive post-update
-		 pre-auto-gc post-rewrite /
-                     unless @hooks;
+    my %gerrit_hooks = ('ref-update' => undef, 'patchset-created' => undef);
+
+    unless (@hooks) {
+        @hooks = qw/ applypatch-msg pre-applypatch post-applypatch
+                     pre-commit prepare-commit-msg commit-msg post-commit
+                     pre-rebase post-checkout post-merge pre-receive
+                     update post-receive post-update pre-auto-gc
+                     post-rewrite /;
+        push @hooks, keys(%gerrit_hooks) if $gerrit_config;
+    }
 
     foreach my $hook (@hooks) {
-	my $hookfile = catfile($hooks_dir, $hook);
+	my $hookfile = catfile(exists $gerrit_hooks{$hook} ? $gerrit_config->{hooks_dir} : $hooks_dir, $hook);
 	if ($^O eq 'MSWin32') {
             (my $perl = $^X) =~ tr:\\:/:;
             $hook_pl =~ tr:\\:/:;
@@ -125,17 +192,20 @@ EOF
             write_file($hookfile, {err_mode => 'carp'}, $script)
                 or BAIL_OUT("can't write_file('$hookfile', '$script')\n");
 	    chmod 0755 => $hookfile;
+        } elsif (-e $hookfile) {
+            -l $hookfile && readlink($hookfile) eq $hook_pl
+                or BAIL_OUT("can't symlink('$hook_pl', '$hookfile') because the target already exists.");
 	} else {
-            symlink 'hook.pl', $hookfile
-                or BAIL_OUT("can't symlink '$hooks_dir', '$hook': $!");
+            symlink $hook_pl, $hookfile
+                or BAIL_OUT("can't symlink('$hook_pl', '$hookfile'): $!");
         }
     }
 }
 
 sub new_repos {
-    my $repodir  = catfile($T, 'repo');
-    my $filename = catfile($repodir, 'file.txt');
-    my $clonedir = catfile($T, 'clone');
+    my $repodir   = catfile($T, 'repo');
+    my $filename  = catfile($repodir, 'file.txt');
+    my $clonedir  = catfile($T, 'clone');
 
     # Remove the directories recursively to create new ones.
     remove(\1, $repodir, $clonedir);
@@ -172,7 +242,18 @@ sub new_repos {
 
         $repo->command(qw/remote add clone/, $clonedir);
 
-	return ($repo, $filename, $clone, $T);
+        if ($gerrit_config) {
+            my $gerritdir = catfile($T, 'gerrit');
+            Git::command(qw/clone -q/, $gerrit_config->{repo_url}, $gerritdir);
+            $gerrit_config->{git}  = Git::More->repository($gerritdir);
+            $gerrit_config->{file} = catfile($gerritdir, $gerrit_config->{file});
+            unless (-f $gerrit_config->{file}) {
+                write_file($gerrit_config->{file}, {err_mode => 'carp'}, "line\n")
+                    or die "can't write_file('$gerrit_config->{file}')\n";
+            }
+        }
+
+	return ($repo, $filename, $clone, $T, $gerrit_config);
     } otherwise {
         my $E = shift;
         # The BAIL_OUT function can't show a message with newlines

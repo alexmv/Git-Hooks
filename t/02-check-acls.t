@@ -4,11 +4,11 @@ use 5.010;
 use strict;
 use warnings;
 use lib 't';
-use Test::More tests => 27;
+use Test::More tests => 30;
 
 BEGIN { require "test-functions.pl" };
 
-my ($repo, $file, $clone) = new_repos();
+my ($repo, $file, $clone, $T, $gerrit) = new_repos();
 foreach my $git ($repo, $clone) {
     install_hooks($git, undef, qw/update pre-receive/);
 }
@@ -132,3 +132,90 @@ check_cannot_push('deny ACL push tag');
 
 $clone->command(config => '--add', 'check-acls.acl', 'admin CRUD ^refs/tags/');
 check_can_push('allow ACL push tag');
+
+
+# Gerrit tests
+
+sub check_can_push2gerrit {
+    my ($testname) = @_;
+    new_commit($gerrit->{git}, $gerrit->{file});
+    test_ok($testname, $gerrit->{git}, 'push', 'origin', $gerrit->{branch});
+}
+
+sub check_cannot_push2gerrit {
+    my ($testname, $error) = @_;
+    new_commit($gerrit->{git}, $gerrit->{file});
+    test_nok_match($testname, $error || qr/\) cannot \S+ ref /, $gerrit->{git}, 'push', 'origin', $gerrit->{branch});
+}
+
+my $markfile = catfile($T, 'patchset_mark');
+$gerrit->{remote}->command(qw/config config githooks.gerrit.patchset-created-accept-cmd/, "echo 1 >$markfile");
+$gerrit->{remote}->command(qw/config config githooks.gerrit.patchset-created-reject-cmd/, "echo 0 >$markfile");
+
+sub check_can_push2gerrit_for {
+    my ($testname) = @_;
+    new_commit($gerrit->{local}, $gerrit->{file});
+    unlink $markfile;
+    my ($ok, $exit, $stdout, $stderr) = test_command($gerrit->{local}, qw[push origin HEAD:refs/for/master@]);
+    if (! $ok) {
+        fail($testname);
+	diag(" exit=$exit\n stdout=$stdout\n stderr=$stderr\n git-version=$git_version\n");
+    } elsif (! -r $markfile) {
+        fail($testname);
+	diag(" patchset-created did not create the mark file\n");
+    } else {
+        my $mark = read_file($markfile);
+        if ($mark) {
+            pass($testname);
+        } else {
+            fail($testname);
+            diag(" patchset-created mark failed\n");
+        }
+    }
+}
+
+sub check_cannot_push2gerrit_for {
+    my ($testname) = @_;
+    new_commit($gerrit->{local}, $gerrit->{file});
+    unlink $markfile;
+    my ($ok, $exit, $stdout, $stderr) = test_command($gerrit->{local}, qw[push origin HEAD:refs/for/master@]);
+    if (! $ok) {
+        fail($testname);
+	diag(" exit=$exit\n stdout=$stdout\n stderr=$stderr\n git-version=$git_version\n");
+    } elsif (! -r $markfile) {
+        fail($testname);
+	diag(" patchset-created did not create the mark file\n");
+    } else {
+        my $mark = read_file($markfile);
+        if ($mark) {
+            fail($testname);
+            diag(" patchset-created mark succeeded\n");
+        } else {
+            pass($testname);
+        }
+    }
+}
+
+SKIP: {
+    skip "Gerrit tests need a t/GERRIT_CONFIG file", 3 unless $gerrit;
+
+    install_hooks($gerrit->{remote}, undef, qw/ref-update patchset-created/);
+
+    $gerrit->{remote}->command(qw/config githooks.plugin CheckAcls/);
+
+    check_cannot_push2gerrit('gerrit: deny push by default');
+
+    $gerrit->{remote}->command(qw/config --replace-all CheckAcls.acl/, "$gerrit->{userid} U refs/heads/master");
+
+    check_can_push2gerrit('gerrit: allow ACL refs/heads/master');
+
+    $gerrit->{remote}->command(qw/config --replace-all CheckAcls.acl/, "$gerrit->{userid} U refs/heads/branch");
+
+    check_cannot_push2gerrit('gerrit: deny ACL other ref');
+
+    check_cannot_push2gerrit_for('gerrit for: deny push by default');
+
+    $gerrit->{remote}->command(qw/config --replace-all CheckAcls.acl/, "$gerrit->{userid} U refs/heads/master");
+
+    check_can_push2gerrit_for('gerrit for: allow ACL refs/for/master');
+};
