@@ -1,5 +1,6 @@
 package Git::Hooks;
-# ABSTRACT: A framework for implementing Git hooks.
+
+our $VERSION = '0.046';
 
 use 5.010;
 use strict;
@@ -553,7 +554,15 @@ EOF
 1; # End of Git::Hooks
 __END__
 
-=for Pod::Coverage spawn_external_hook_with_feed spawn_external_hook grok_groups_spec grok_groups
+=pod
+
+=head1 NAME
+
+Git::Hooks - A framework for implementing Git hooks.
+
+=head1 VERSION
+
+version 0.046
 
 =head1 SYNOPSIS
 
@@ -584,6 +593,8 @@ options. (More on this later.)
         use Git::Hooks;
 
         run_hook($0, @ARGV);
+
+=for Pod::Coverage spawn_external_hook_with_feed spawn_external_hook grok_groups_spec grok_groups
 
 =head1 INTRODUCTION
 
@@ -1436,6 +1447,17 @@ A Git extension with some goodies for hook developers.
 A thin wrapper around Gerrit's REST API.
 
 =back
+
+=head1 AUTHOR
+
+Gustavo L. de M. Chaves <gnustavo@cpan.org>
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is copyright (c) 2013 by CPqD <www.cpqd.com.br>.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
 
 =cut
 

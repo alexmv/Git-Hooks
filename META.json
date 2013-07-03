@@ -1,0 +1,87 @@
+{
+   "abstract" : "A framework for implementing Git hooks.",
+   "author" : [
+      "Gustavo L. de M. Chaves <gnustavo@cpan.org>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Milla version v1.0.2, Dist::Zilla version 4.300035, CPAN::Meta::Converter version 2.131560",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Git-Hooks",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "xt",
+         "inc",
+         "share",
+         "eg",
+         "examples"
+      ]
+   },
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "Config" : "0",
+            "File::Path" : "2.08",
+            "File::Remove" : "0",
+            "File::pushd" : "0",
+            "Test::More" : "0",
+            "URI::file" : "0"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Module::Build::Tiny" : "0.024"
+         }
+      },
+      "develop" : {
+         "requires" : {
+            "Test::Pod" : "1.41"
+         }
+      },
+      "runtime" : {
+         "recommends" : {
+            "JIRA::Client" : "0",
+            "Text::SpellChecker" : "0"
+         },
+         "requires" : {
+            "Carp" : "0",
+            "Cwd" : "0",
+            "Data::Util" : "0",
+            "Error" : "0",
+            "Exporter" : "0",
+            "File::Basename" : "0",
+            "File::Slurp" : "0",
+            "File::Spec::Functions" : "0",
+            "File::Temp" : "0",
+            "Gerrit::REST" : "0",
+            "List::MoreUtils" : "0",
+            "parent" : "0",
+            "perl" : "5.010"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/gnustavo/Git-Hooks/issues"
+      },
+      "homepage" : "https://github.com/gnustavo/Git-Hooks",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/gnustavo/Git-Hooks.git",
+         "web" : "https://github.com/gnustavo/Git-Hooks"
+      }
+   },
+   "version" : "0.046",
+   "x_contributors" : [
+      "Gustavo L. de M. Chaves <gustavo@cpqd.com.br>",
+      "Gustavo L. de M. Chaves <gustavo@gnustavo.com>"
+   ]
+}
+
